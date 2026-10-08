@@ -642,6 +642,7 @@ body[data-page="resume"] .page-intro { padding-block: 2rem; }
 .resume-location { color: var(--ink-soft); margin-bottom: .6rem; }
 .resume-contact { display: flex; gap: 1.25rem; }
 .resume-updated { color: var(--ink-soft); font-size: .8rem; margin: .8rem 0 0; }
+.resume-updated + .button { margin-top: calc(.75rem + 24px); }
 .resume-sidebar .resume-entry-heading { flex-direction: column; gap: .4rem; }
 .resume-sidebar .resume-meta { text-align: left; }
 .resume-sidebar .resume-section { font-size: .9rem; }
