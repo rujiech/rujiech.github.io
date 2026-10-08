@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f7f3eb"/>
+  <path d="M0 472h1200v158H0z" fill="#dfe8dd"/>
+  <path d="M120 126h330v330H120z" fill="#fffdf8" stroke="#d8d0c3" stroke-width="3"/>
+  <path d="M165 390 265 250l80 88 60-45 95 97H165z" fill="#e7edf0" stroke="#355f78" stroke-width="4"/>
+  <path d="M555 176h410M555 238h520M555 300h460" stroke="#395c49" stroke-width="14"/>
+  <text x="555" y="394" font-family="Georgia, serif" font-size="58" fill="#252a27">Rujie Cheng</text>
+  <text x="555" y="456" font-family="Arial, sans-serif" font-size="29" fill="#5d625e">City Planner · GIS &amp; Spatial Analysis</text>
+</svg>

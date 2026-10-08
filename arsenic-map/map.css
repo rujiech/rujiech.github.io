@@ -1,0 +1,17 @@
+/* Small additions to the original map design; no portfolio design tokens. */
+.control-panel h1{font-size:1.35rem;line-height:1.25;font-weight:700;margin-bottom:8px}
+.control-panel{gap:20px}.control-panel .panel-copy{margin-bottom:0}#strategy-purpose{margin-top:3px;font-size:.88rem}details{border-top:1px solid var(--border);padding-top:10px}summary{cursor:pointer;font-size:.86rem;font-weight:700;color:#425048}.compact-note{color:var(--muted);font-size:.78rem;line-height:1.45;margin:8px 0 0}.summary-copy{border-top:1px solid var(--border);padding-top:10px;font-weight:600}details .panel-copy{margin-top:10px}.control-panel details.field-group>*:not(summary){margin-top:10px}#well-search{display:grid;gap:8px}#well-id{width:100%;min-height:40px;border:1px solid #aeb9b3;border-radius:6px;padding:8px 12px;background:white;color:var(--text);font:inherit}.data-note a{color:#2d5f73}.map-legend-shell{max-width:300px}.legend-row-note{font-size:.75rem;line-height:1.4}.restored-cluster-swatch{background:color-mix(in srgb,var(--cluster-color) 68%,white);opacity:.9}.cluster-badge{display:grid;place-items:center;font-size:12px;font-weight:700;color:#17211c}.detail-section-title{font-size:.8rem;margin-top:10px;margin-bottom:3px}.tooltip-note{font-size:.72rem;color:var(--muted);line-height:1.35;margin-top:6px}.well-tooltip .tooltip-content{max-height:410px;overflow:auto}.leaflet-container{font-family:"Inter",ui-sans-serif,system-ui,sans-serif}.legend-row span:last-child{overflow-wrap:break-word}
+@media(max-width:680px){html,body{height:auto;overflow:auto}.app-shell{grid-template-columns:1fr;height:auto;min-height:100vh;overflow:visible}.control-panel{height:auto;overflow:visible;gap:14px}.map-panel{height:560px;min-height:560px}#map{height:100%;min-height:100%}.map-legend-shell{max-width:230px}.map-legend-content{max-height:230px}.map-search-row{width:calc(100vw - 90px)}.well-tooltip .tooltip-content{max-height:360px}.control-panel .data-note{margin-top:0}}
+
+.leaflet-tooltip.cluster-tooltip-shell{max-width:300px;white-space:normal}.tooltip-method-note{padding-top:6px;margin-top:8px}.tooltip-method-note summary{font-size:.72rem}.tooltip-method-note p{margin:6px 0;font-size:.72rem;line-height:1.4}
+
+.leaflet-popup.well-popup .leaflet-popup-content-wrapper{padding:0;border-radius:8px;box-shadow:var(--shadow);font-family:Inter,ui-sans-serif,system-ui,sans-serif}.well-popup .leaflet-popup-content{margin:0;width:280px!important;font-family:Inter,ui-sans-serif,system-ui,sans-serif}.well-popup .tooltip-content{width:280px}.well-popup .leaflet-popup-close-button{top:3px;right:3px}.well-popup .tooltip-title:first-child{padding-right:16px}
+.well-popup .tooltip-row{grid-template-columns:104px minmax(0,1fr)}.well-popup .leaflet-popup-content{overflow-x:hidden}
+@media (min-width: 681px) and (max-width: 980px) { .control-panel { display: flex; } }
+
+/* Wider hover cards, without changing their contents. */
+.leaflet-tooltip.cluster-tooltip-shell { width: max-content; max-width: min(440px, calc(100vw - 48px)); white-space: normal; }
+.leaflet-tooltip.well-tooltip { width: min(400px, calc(100vw - 48px)); max-width: min(400px, calc(100vw - 48px)); }
+.well-tooltip .tooltip-content { width: 100%; }
+.well-tooltip .tooltip-row { grid-template-columns: 130px minmax(0, 1fr); }
+@media (max-width: 520px) { .well-tooltip .tooltip-row { grid-template-columns: 104px minmax(0, 1fr); } }

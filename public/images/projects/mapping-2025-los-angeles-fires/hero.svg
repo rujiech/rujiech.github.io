@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+  <rect width="1400" height="900" fill="#f7f3eb"/>
+  <text x="80" y="105" font-family="Georgia, serif" font-size="58" fill="#252a27">Mapping the 2025 Los Angeles Fires</text>
+  <text x="80" y="155" font-family="Arial, sans-serif" font-size="28" fill="#5d625e">Burn-area detection, impact analysis, and recovery questions</text>
+  <rect x="80" y="220" width="1240" height="560" fill="#fffdf8" stroke="#d8d0c3" stroke-width="4"/>
+  <path d="M80 680C340 585 500 660 710 515s410-260 610-120v385H80z" fill="#dfe8dd"/>
+  <path d="M180 690C360 490 455 455 610 330s260-125 430-220" fill="none" stroke="#b98562" stroke-width="34"/>
+  <path d="M760 470c88-110 56-188 24-266 132 118 197 232 98 362-48 62-145 78-210 32 50-14 78-64 88-128z" fill="#7a5a3e"/>
+  <g fill="#355f78">
+    <circle cx="350" cy="530" r="18"/>
+    <circle cx="885" cy="420" r="18"/>
+    <circle cx="1040" cy="610" r="18"/>
+  </g>
+</svg>

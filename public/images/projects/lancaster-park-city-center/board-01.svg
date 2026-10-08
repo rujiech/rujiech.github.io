@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+  <rect width="1400" height="900" fill="#fffdf8"/>
+  <text x="70" y="95" font-family="Georgia, serif" font-size="48" fill="#252a27">Analysis + Concept Board</text>
+  <rect x="70" y="150" width="560" height="620" fill="#f7f3eb" stroke="#d8d0c3"/>
+  <rect x="700" y="150" width="630" height="290" fill="#dfe8dd"/>
+  <rect x="700" y="480" width="300" height="290" fill="#e7edf0"/>
+  <rect x="1030" y="480" width="300" height="290" fill="#f7f3eb" stroke="#d8d0c3"/>
+  <g stroke="#395c49" stroke-width="8" fill="none"><path d="M130 260h420M130 380h420M130 500h420M230 200v500M410 200v500"/></g>
+</svg>

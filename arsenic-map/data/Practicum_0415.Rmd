@@ -1,0 +1,591 @@
+---
+title: "CPLN 7900 Practicum - Three Final Packages (Interpretable Simplified Mode)"
+author: "Hansen Xie, Lingye Meng, Rujie Chen"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+  pdf_document:
+    toc: true
+    toc_depth: 2
+params:
+  data_file: arsenicDec22_2023.csv
+  target: new_arsenic
+  positive_label: pos
+  negative_label: neg
+  seed: 123
+  test_prop: 0.3
+  n_times: 10
+  tune_length: 5
+  cv_folds: 5
+  cv_repeats: 2
+  outline_shp: "/Volumes/Extreme SSD/UPenn_Class/2026 Spring/CPLN Practicum/gastonCountyOutline/gaston_outline_Project.shp"
+---
+
+# 0. Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(tibble)
+library(progress)
+library(sf)
+library(viridis)
+library(caret)
+library(pROC)
+library(glmnet)
+library(e1071)
+library(randomForest)
+library(gbm)
+
+set.seed(params$seed)
+
+to_class_factor <- function(y01, pos_label = "pos", neg_label = "neg") {
+  y01 <- as.integer(y01)
+  factor(ifelse(y01 == 1, pos_label, neg_label), levels = c(pos_label, neg_label))
+}
+
+enforce_class_levels <- function(d) {
+  d$Class <- factor(d$Class, levels = c(params$positive_label, params$negative_label))
+  d
+}
+
+calc_binary_metrics <- function(obs, prob, threshold, pos_label = params$positive_label, neg_label = params$negative_label) {
+  pred <- factor(ifelse(prob >= threshold, pos_label, neg_label), levels = c(pos_label, neg_label))
+  obs  <- factor(obs, levels = c(pos_label, neg_label))
+
+  tp <- sum(pred == pos_label & obs == pos_label, na.rm = TRUE)
+  tn <- sum(pred == neg_label & obs == neg_label, na.rm = TRUE)
+  fp <- sum(pred == pos_label & obs == neg_label, na.rm = TRUE)
+  fn <- sum(pred == neg_label & obs == pos_label, na.rm = TRUE)
+  n  <- tp + tn + fp + fn
+
+  tibble(
+    tp = tp,
+    tn = tn,
+    fp = fp,
+    fn = fn,
+    accuracy = ifelse(n > 0, (tp + tn) / n, NA_real_),
+    sensitivity = ifelse((tp + fn) > 0, tp / (tp + fn), NA_real_),
+    specificity = ifelse((tn + fp) > 0, tn / (tn + fp), NA_real_),
+    precision = ifelse((tp + fp) > 0, tp / (tp + fp), NA_real_),
+    npv = ifelse((tn + fn) > 0, tn / (tn + fn), NA_real_),
+    false_positive_rate = ifelse((fp + tn) > 0, fp / (fp + tn), NA_real_),
+    false_negative_rate = ifelse((fn + tp) > 0, fn / (fn + tp), NA_real_),
+    predicted_positive_rate = ifelse(n > 0, (tp + fp) / n, NA_real_),
+    predicted_positive_count = tp + fp
+  )
+}
+
+apply_imbalance <- function(train_df) {
+  train_df$Class <- factor(train_df$Class, levels = c(params$positive_label, params$negative_label))
+  out <- caret::upSample(
+    x = train_df %>% dplyr::select(-Class),
+    y = train_df$Class,
+    yname = "Class"
+  )
+  out$Class <- factor(out$Class, levels = c(params$positive_label, params$negative_label))
+  out %>% dplyr::slice_sample(prop = 1)
+}
+
+ctrl_cv <- trainControl(
+  method = "repeatedcv",
+  number = params$cv_folds,
+  repeats = params$cv_repeats,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = "final",
+  allowParallel = FALSE,
+  verboseIter = FALSE
+)
+```
+
+# 1. Load and prepare data
+
+```{r load-data}
+if (grepl("\\.csv$", params$data_file, ignore.case = TRUE)) {
+  data1 <- read.csv(params$data_file)
+} else {
+  stop("data_file must be a .csv file")
+}
+
+if ("DEM" %in% names(data1)) {
+  data1 <- data1[!is.na(data1$DEM), ]
+  data1 <- data1[data1$DEM != 0, ]
+}
+
+variables <- c(
+  "new_arsenic", "DensityWel", "Curvature", "DistBrown", "DisHazSite", "DistlnaHaS",
+  "DisRUST", "Slope", "TPI", "TRI", "TWI", "DEM", "DisALa", "DisDam", "DisCoalAsh",
+  "Zinc", "Hardness", "Alkalinity", "Sodium", "Calcium", "Sulfate", "Nitrate",
+  "Fluoride", "Iron", "Magnesium", "Manganese", "Chloride", "Barium", "mica",
+  "newPH", "AutoCov"
+)
+
+vars_present <- intersect(variables, names(data1))
+data_extracted <- data1[, vars_present, drop = FALSE]
+stopifnot(params$target %in% names(data_extracted))
+data_extracted[[params$target]] <- as.integer(data_extracted[[params$target]])
+```
+
+```{r impute-and-class}
+y <- data_extracted[[params$target]]
+X <- data_extracted %>% dplyr::select(-all_of(params$target))
+
+for (nm in names(X)) {
+  if (is.numeric(X[[nm]]) || is.integer(X[[nm]])) {
+    med <- median(X[[nm]], na.rm = TRUE)
+    X[[nm]][is.na(X[[nm]])] <- med
+  } else {
+    X[[nm]] <- as.factor(X[[nm]])
+    mode_val <- names(sort(table(X[[nm]]), decreasing = TRUE))[1]
+    X[[nm]][is.na(X[[nm]])] <- mode_val
+  }
+}
+
+df_base <- bind_cols(X, !!params$target := y)
+df_base$Class <- to_class_factor(df_base[[params$target]], params$positive_label, params$negative_label)
+df_base <- df_base %>% dplyr::select(-all_of(params$target))
+original_features <- setdiff(names(df_base), "Class")
+```
+
+# 2. Build full mode and interpretable mode datasets
+
+## 2.1 Full mode
+
+```{r full-mode}
+df_full <- df_base
+
+# interpretable ratios
+if (all(c("Calcium", "Magnesium") %in% names(df_full))) {
+  df_full$Ca_Mg_ratio <- df_full$Calcium / (df_full$Magnesium + 0.01)
+}
+if (all(c("Sodium", "Chloride") %in% names(df_full))) {
+  df_full$Na_Cl_ratio <- df_full$Sodium / (df_full$Chloride + 0.01)
+}
+if (all(c("Iron", "Manganese") %in% names(df_full))) {
+  df_full$Fe_Mn_ratio <- df_full$Iron / (df_full$Manganese + 0.001)
+}
+
+# log transforms
+log_candidates <- c()
+for (nm in original_features) {
+  if (is.numeric(df_full[[nm]])) {
+    skew_val <- e1071::skewness(df_full[[nm]], na.rm = TRUE)
+    if (!is.na(skew_val) && abs(skew_val) > 1) log_candidates <- c(log_candidates, nm)
+  }
+}
+for (nm in unique(log_candidates)) {
+  min_val <- min(df_full[[nm]], na.rm = TRUE)
+  offset <- ifelse(min_val <= 0, abs(min_val) + 1, 0)
+  df_full[[paste0("log_", nm)]] <- log(df_full[[nm]] + offset)
+}
+
+# squared terms
+poly_candidates <- intersect(c("DEM", "Slope", "TWI", "TPI", "TRI", "Hardness",
+                               "Alkalinity", "Sulfate", "Nitrate", "newPH"), names(df_full))
+for (nm in poly_candidates) {
+  if (is.numeric(df_full[[nm]])) df_full[[paste0(nm, "_sq")]] <- df_full[[nm]]^2
+}
+
+# more ratios
+if (all(c("Sulfate", "Chloride") %in% names(df_full))) df_full$SO4_Cl_ratio <- df_full$Sulfate / (df_full$Chloride + 0.01)
+if (all(c("Hardness", "Alkalinity") %in% names(df_full))) df_full$Hard_Alk_ratio <- df_full$Hardness / (df_full$Alkalinity + 0.01)
+if (all(c("Nitrate", "Sulfate") %in% names(df_full))) df_full$NO3_SO4_ratio <- df_full$Nitrate / (df_full$Sulfate + 0.01)
+if (all(c("TRI", "TPI") %in% names(df_full))) df_full$TRI_TPI_ratio <- df_full$TRI / (abs(df_full$TPI) + 0.01)
+if (all(c("Slope", "TWI") %in% names(df_full))) df_full$Slope_TWI_ratio <- df_full$Slope / (df_full$TWI + 0.01)
+
+# interactions
+if (all(c("DEM", "DistBrown") %in% names(df_full))) df_full$DEM_x_DistBrown <- df_full$DEM * df_full$DistBrown
+if (all(c("Slope", "TWI") %in% names(df_full))) df_full$Slope_x_TWI <- df_full$Slope * df_full$TWI
+if (all(c("DEM", "TWI") %in% names(df_full))) df_full$DEM_x_TWI <- df_full$DEM * df_full$TWI
+if (all(c("newPH", "Hardness") %in% names(df_full))) df_full$pH_x_Hardness <- df_full$newPH * df_full$Hardness
+if (all(c("newPH", "Iron") %in% names(df_full))) df_full$pH_x_Iron <- df_full$newPH * df_full$Iron
+if (all(c("Alkalinity", "newPH") %in% names(df_full))) df_full$Alk_x_pH <- df_full$Alkalinity * df_full$newPH
+if (all(c("DensityWel", "Nitrate") %in% names(df_full))) df_full$WellDens_x_Nitrate <- df_full$DensityWel * df_full$Nitrate
+if (all(c("DisHazSite", "Iron") %in% names(df_full))) df_full$HazSite_x_Iron <- df_full$DisHazSite * df_full$Iron
+
+for (nm in names(df_full)) {
+  if (is.numeric(df_full[[nm]])) {
+    df_full[[nm]][is.infinite(df_full[[nm]])] <- NA
+    df_full[[nm]][is.nan(df_full[[nm]])] <- NA
+    if (any(is.na(df_full[[nm]]))) df_full[[nm]][is.na(df_full[[nm]])] <- median(df_full[[nm]], na.rm = TRUE)
+  }
+}
+```
+
+```{r full-feature-selection}
+df_full$Class <- factor(df_full$Class, levels = c(params$positive_label, params$negative_label))
+
+nzv <- nearZeroVar(df_full %>% dplyr::select(-Class), saveMetrics = TRUE)
+nzv_remove <- rownames(nzv)[nzv$nzv]
+if (length(nzv_remove) > 0) {
+  df_full <- df_full %>% dplyr::select(-all_of(nzv_remove))
+}
+
+is_engineered <- function(x) grepl("^log_", x) | grepl("_sq$", x) | grepl("_x_", x) | grepl("_ratio$", x)
+removal_priority <- function(x) ifelse(is_engineered(x), 1L, 0L)
+
+numeric_cols <- df_full %>% dplyr::select(-Class) %>% dplyr::select(where(is.numeric))
+if (ncol(numeric_cols) >= 2) {
+  cor_matrix <- cor(numeric_cols, use = "pairwise.complete.obs")
+  cn <- colnames(cor_matrix)
+  to_remove <- character(0)
+  pr <- setNames(removal_priority(cn), cn)
+  cutoff <- 0.95
+
+  for (j in 2:length(cn)) {
+    for (k in 1:(j - 1)) {
+      v1 <- cn[k]; v2 <- cn[j]
+      if (v1 %in% to_remove || v2 %in% to_remove) next
+      r <- cor_matrix[v1, v2]
+      if (is.na(r)) next
+      if (abs(r) >= cutoff) {
+        if (pr[v1] > pr[v2]) {
+          to_remove <- c(to_remove, v1)
+        } else if (pr[v2] > pr[v1]) {
+          to_remove <- c(to_remove, v2)
+        } else {
+          avg1 <- mean(abs(cor_matrix[v1, ]), na.rm = TRUE)
+          avg2 <- mean(abs(cor_matrix[v2, ]), na.rm = TRUE)
+          to_remove <- c(to_remove, ifelse(avg1 >= avg2, v1, v2))
+        }
+      }
+    }
+  }
+
+  if (length(unique(to_remove)) > 0) {
+    df_full <- df_full %>% dplyr::select(-all_of(unique(to_remove)))
+  }
+}
+```
+
+## 2.2 Interpretable mode (used as simplified mode)
+
+```{r interpretable-mode}
+df_interpretable <- df_base
+
+message("Using INTERPRETABLE features only (no complex transformations)")
+
+if (all(c("Calcium", "Magnesium") %in% names(df_interpretable))) {
+  df_interpretable$Ca_Mg_ratio <- df_interpretable$Calcium / (df_interpretable$Magnesium + 0.01)
+}
+if (all(c("Sodium", "Chloride") %in% names(df_interpretable))) {
+  df_interpretable$Na_Cl_ratio <- df_interpretable$Sodium / (df_interpretable$Chloride + 0.01)
+}
+if (all(c("Iron", "Manganese") %in% names(df_interpretable))) {
+  df_interpretable$Fe_Mn_ratio <- df_interpretable$Iron / (df_interpretable$Manganese + 0.001)
+}
+
+for (nm in names(df_interpretable)) {
+  if (is.numeric(df_interpretable[[nm]])) {
+    df_interpretable[[nm]][is.infinite(df_interpretable[[nm]])] <- NA
+    if (any(is.na(df_interpretable[[nm]]))) {
+      df_interpretable[[nm]][is.na(df_interpretable[[nm]])] <- median(df_interpretable[[nm]], na.rm = TRUE)
+    }
+  }
+}
+
+new_features_interpretable <- setdiff(names(df_interpretable), c(original_features, "Class"))
+message("Added ", length(new_features_interpretable), " interpretable ratio features: ",
+        paste(new_features_interpretable, collapse = ", "))
+```
+
+```{r interpretable-feature-selection}
+df_interpretable$Class <- factor(df_interpretable$Class, levels = c(params$positive_label, params$negative_label))
+message("Interpretable mode: skipping complex feature selection")
+
+nzv_i <- nearZeroVar(df_interpretable %>% dplyr::select(-Class), saveMetrics = TRUE)
+nzv_remove_i <- rownames(nzv_i)[nzv_i$nzv]
+
+if (length(nzv_remove_i) > 0) {
+  message("Removing ", length(nzv_remove_i), " near-zero variance features")
+  df_interpretable <- df_interpretable %>% dplyr::select(-all_of(nzv_remove_i))
+}
+```
+
+# 3. Build the three final package datasets
+
+```{r package-datasets}
+full_df <- df_full %>% dplyr::select(Class, dplyr::everything()) %>% enforce_class_levels()
+simplified_df <- df_interpretable %>% dplyr::select(Class, dplyr::everything()) %>% enforce_class_levels()
+
+package_specs <- tribble(
+  ~package_name,           ~dataset_name,    ~model_name, ~threshold,
+  "Screening-First",      "simplified",   "glmnet",   0.2,
+  "Confirmation-First",   "full",         "rf",       0.5,
+  "Explanation-First",    "simplified",   "rf",       0.3
+)
+
+package_specs
+```
+
+# 4. Repeated evaluation for the three final packages only
+
+```{r run-packages, warning=FALSE, message=TRUE}
+package_results <- tibble()
+package_predictions <- tibble()
+
+pb <- progress_bar$new(
+  format = "[:bar] :percent | elapsed: :elapsed | eta: :eta | :message",
+  total = nrow(package_specs) * params$n_times,
+  clear = FALSE,
+  width = 70
+)
+
+for (pkg_i in seq_len(nrow(package_specs))) {
+  pkg <- package_specs[pkg_i, ]
+
+  df_model <- if (pkg$dataset_name == "full") full_df else simplified_df
+  df_model <- enforce_class_levels(df_model)
+  row_ids <- seq_len(nrow(df_model))
+
+  for (i in seq_len(params$n_times)) {
+    idx_train <- createDataPartition(df_model$Class, p = 1 - params$test_prop, list = FALSE)
+    train0 <- df_model[idx_train, ] %>% enforce_class_levels()
+    test0  <- df_model[-idx_train, ] %>% enforce_class_levels()
+    test_ids <- row_ids[-idx_train]
+
+    train_bal <- apply_imbalance(train0)
+
+    set.seed(params$seed + pkg_i * 1000 + i)
+
+    fit <- tryCatch({
+      if (pkg$model_name == "glmnet") {
+        caret::train(
+          Class ~ .,
+          data = train_bal,
+          method = "glmnet",
+          metric = "ROC",
+          trControl = ctrl_cv,
+          tuneLength = params$tune_length,
+          preProcess = c("center", "scale")
+        )
+      } else if (pkg$model_name == "rf") {
+        caret::train(
+          Class ~ .,
+          data = train_bal,
+          method = "rf",
+          metric = "ROC",
+          trControl = ctrl_cv,
+          tuneLength = params$tune_length
+        )
+      } else {
+        stop("Unsupported model")
+      }
+    }, error = function(e) {
+      message(sprintf("Package %s failed on iter %d: %s", pkg$package_name, i, e$message))
+      NULL
+    })
+
+    if (is.null(fit)) {
+      pb$tick(1, tokens = list(message = sprintf("%s | iter %d FAILED", pkg$package_name, i)))
+      next
+    }
+
+    probs <- predict(fit, newdata = test0, type = "prob")[[params$positive_label]]
+    auc_val <- as.numeric(pROC::auc(
+      pROC::roc(test0$Class, probs,
+                levels = c(params$negative_label, params$positive_label),
+                direction = "<", quiet = TRUE)
+    ))
+
+    m <- calc_binary_metrics(test0$Class, probs, pkg$threshold) %>%
+      mutate(
+        package_name = pkg$package_name,
+        dataset_name = pkg$dataset_name,
+        model_name = pkg$model_name,
+        iter = i,
+        auc = auc_val
+      )
+
+    package_results <- bind_rows(package_results, m)
+
+    package_predictions <- bind_rows(
+      package_predictions,
+      tibble(
+        package_name = pkg$package_name,
+        dataset_name = pkg$dataset_name,
+        model_name = pkg$model_name,
+        threshold = pkg$threshold,
+        iter = i,
+        row_id = test_ids,
+        truth = test0$Class,
+        prob = probs,
+        pred_class = factor(ifelse(probs >= pkg$threshold, params$positive_label, params$negative_label),
+                            levels = c(params$positive_label, params$negative_label))
+      )
+    )
+
+    pb$tick(1, tokens = list(message = sprintf("%s | iter %d done", pkg$package_name, i)))
+  }
+}
+```
+
+# 5. Package comparison summary
+
+```{r package-summary}
+package_summary <- package_results %>%
+  group_by(package_name, dataset_name, model_name) %>%
+  summarise(
+    threshold = first(package_specs$threshold[match(first(package_name), package_specs$package_name)]),
+    n_iter = dplyr::n(),
+    mean_auc = mean(auc, na.rm = TRUE),
+    sd_auc = sd(auc, na.rm = TRUE),
+    mean_accuracy = mean(accuracy, na.rm = TRUE),
+    mean_sensitivity = mean(sensitivity, na.rm = TRUE),
+    mean_specificity = mean(specificity, na.rm = TRUE),
+    mean_precision = mean(precision, na.rm = TRUE),
+    mean_npv = mean(npv, na.rm = TRUE),
+    mean_fpr = mean(false_positive_rate, na.rm = TRUE),
+    mean_fnr = mean(false_negative_rate, na.rm = TRUE),
+    mean_predicted_positive_count = mean(predicted_positive_count, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+
+package_summary
+```
+
+```{r package-metric-plot, fig.width=10, fig.height=5}
+plot_df <- package_summary %>%
+  select(package_name, mean_sensitivity, mean_specificity, mean_precision) %>%
+  pivot_longer(cols = starts_with("mean_"), names_to = "metric", values_to = "value") %>%
+  mutate(metric = recode(metric,
+                         mean_sensitivity = "Sensitivity",
+                         mean_specificity = "Specificity",
+                         mean_precision = "Precision"))
+
+ggplot(plot_df, aes(x = package_name, y = value, fill = metric)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Three final packages: key decision metrics",
+    x = NULL,
+    y = "Value",
+    fill = "Metric"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 15, hjust = 1))
+```
+
+# 6. Final models for package maps
+
+```{r fit-final-package-models}
+fit_final_package <- function(df_model, model_name) {
+  train_bal <- apply_imbalance(df_model)
+
+  if (model_name == "glmnet") {
+    caret::train(
+      Class ~ .,
+      data = train_bal,
+      method = "glmnet",
+      metric = "ROC",
+      trControl = ctrl_cv,
+      tuneLength = params$tune_length,
+      preProcess = c("center", "scale")
+    )
+  } else if (model_name == "rf") {
+    caret::train(
+      Class ~ .,
+      data = train_bal,
+      method = "rf",
+      metric = "ROC",
+      trControl = ctrl_cv,
+      tuneLength = params$tune_length
+    )
+  } else {
+    stop("Unsupported model")
+  }
+}
+
+final_fits <- list(
+  screening = fit_final_package(simplified_df, "glmnet"),
+  confirmation = fit_final_package(full_df, "rf"),
+  explanation = fit_final_package(simplified_df, "rf")
+)
+```
+
+# 7. Binary package maps (Exceedance / No Exceedance)
+
+```{r map-setup}
+stopifnot("X" %in% names(data1), "Y" %in% names(data1))
+coords_df <- data1 %>% dplyr::select(X, Y)
+stopifnot(nrow(coords_df) == nrow(df_base))
+
+gaston_outline <- st_read(params$outline_shp, quiet = TRUE)
+
+map_df_screening <- bind_cols(coords_df, simplified_df)
+map_df_confirmation <- bind_cols(coords_df, full_df)
+map_df_explanation <- bind_cols(coords_df, simplified_df)
+
+pred_screening <- predict(final_fits$screening,
+                          newdata = map_df_screening %>% select(-X, -Y, -Class),
+                          type = "prob")[[params$positive_label]]
+pred_confirmation <- predict(final_fits$confirmation,
+                             newdata = map_df_confirmation %>% select(-X, -Y, -Class),
+                             type = "prob")[[params$positive_label]]
+pred_explanation <- predict(final_fits$explanation,
+                            newdata = map_df_explanation %>% select(-X, -Y, -Class),
+                            type = "prob")[[params$positive_label]]
+
+package_map_df <- bind_rows(
+  tibble(X = coords_df$X, Y = coords_df$Y,
+         package_name = "Screening-First",
+         threshold = 0.2,
+         prob = pred_screening),
+  tibble(X = coords_df$X, Y = coords_df$Y,
+         package_name = "Confirmation-First",
+         threshold = 0.5,
+         prob = pred_confirmation),
+  tibble(X = coords_df$X, Y = coords_df$Y,
+         package_name = "Explanation-First",
+         threshold = 0.3,
+         prob = pred_explanation)
+) %>%
+  mutate(
+    status = ifelse(prob >= threshold, "Exceedance", "No exceedance"),
+    status = factor(status, levels = c("No exceedance", "Exceedance"))
+  )
+
+package_map_sf <- st_as_sf(package_map_df, coords = c("X", "Y"), crs = 4326)
+package_map_sf <- st_transform(package_map_sf, st_crs(gaston_outline))
+```
+
+```{r binary-package-maps, fig.width=14, fig.height=6}
+ggplot() +
+  geom_sf(data = gaston_outline, fill = "grey95", color = "grey40", linewidth = 0.5) +
+  geom_sf(data = package_map_sf, aes(color = status), size = 1.8, alpha = 0.9) +
+  scale_color_manual(
+    values = c("No exceedance" = "steelblue", "Exceedance" = "red3"),
+    name = NULL
+  ) +
+  facet_wrap(~ package_name, ncol = 3) +
+  labs(
+    title = "Binary package maps: exceedance vs no exceedance",
+    subtitle = "Final package settings applied to Gaston County well locations"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold", size = 12),
+    plot.title = element_text(face = "bold", size = 16),
+    legend.position = "right"
+  )
+```
+
+# 8. Package map counts
+
+```{r package-map-counts}
+package_map_counts <- package_map_sf %>%
+  st_drop_geometry() %>%
+  count(package_name, status) %>%
+  group_by(package_name) %>%
+  mutate(share = n / sum(n)) %>%
+  ungroup()
+
+package_map_counts
+```

@@ -1,0 +1,37 @@
+:root {
+  --no-exceedance: #50adb4;
+  --cluster-border: rgba(255, 255, 255, 0.96);
+}
+
+.legend-swatch.no-exceedance {
+  background: var(--no-exceedance);
+}
+
+.legend-swatch.cluster {
+  background: linear-gradient(180deg, #d8ecee 0%, #9ccfd3 100%);
+  border-color: rgba(255, 255, 255, 0.98);
+}
+
+.cluster-icon-wrapper {
+  background: transparent;
+  border: 0;
+}
+
+.cluster-badge {
+  display: block;
+  border: 3px solid var(--cluster-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cluster-color) 68%, white);
+  box-shadow: 0 10px 24px rgba(30, 47, 42, 0.22);
+  opacity: 0.9;
+}
+
+.cluster-tooltip,
+.leaflet-popup.cluster-popup-shell .leaflet-popup-content {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.cluster-tooltip-row + .cluster-tooltip-row {
+  margin-top: 2px;
+}

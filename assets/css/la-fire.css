@@ -1,0 +1,18 @@
+/* Keep the short introduction and single StoryMap entry compact. */
+.case-body:has(.la-fire-storymap) > .case-text {
+  margin-bottom: 1.25rem;
+}
+.la-fire-storymap {
+  margin-bottom: 2rem;
+}
+.la-fire-storymap a,
+.la-fire-storymap a:hover,
+.la-fire-storymap a:focus,
+.la-fire-storymap a:active,
+.la-fire-storymap a:visited {
+  text-decoration: underline;
+}
+.la-fire-storymap p + p {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+}

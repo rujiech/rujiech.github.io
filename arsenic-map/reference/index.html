@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gaston County Private Well Arsenic Risk Map</title>
+
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="../vendor/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="cluster-overrides.css" />
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body,
+    button,
+    select,
+    input,
+    textarea,
+    label,
+    p,
+    span,
+    div,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      height: 100vh;
+      min-height: 100vh;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      gap: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+      background: #ffffff;
+    }
+
+    .control-panel {
+      height: 100%;
+      min-height: 0;
+      overflow: auto;
+      box-sizing: border-box;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .map-panel {
+      position: relative;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+      background: #f7f7f7;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      z-index: 1;
+    }
+
+    .map-legend-shell {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      z-index: 500;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #map-search-shell {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 500;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .map-status {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 600;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    /* font unification overrides */
+    .control-panel h1,
+    .control-panel h2,
+    .control-panel h3,
+    .control-panel p,
+    .control-panel label,
+    .control-panel select,
+    .control-panel button,
+    .map-legend-shell,
+    .map-legend-shell button,
+    .map-legend-shell div,
+    .map-layers-panel,
+    .map-layers-panel h2,
+    .map-layers-panel label,
+    .map-layers-panel p,
+    .map-toolbar,
+    .map-toolbar button,
+    .map-search-row,
+    .map-search-row input,
+    .map-search-row button,
+    .leaflet-control,
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-content,
+    .leaflet-tooltip,
+    .leaflet-container {
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <section class="control-panel" aria-labelledby="controls-title">
+      <div>
+        <h2 id="controls-title">Map Controls</h2>
+        <p class="panel-copy">
+          Select a package to compare how different screening, confirmation, and explanation priorities classify wells.
+        </p>
+      </div>
+
+      <div class="field-group">
+        <label for="package-select">Package version</label>
+        <select id="package-select" name="package-select"></select>
+      </div>
+
+      <p class="data-note">
+        Hover over a well point to view location details and measured arsenic level. This map supports public awareness and does not replace individual water testing.
+      </p>
+    </section>
+
+    <section class="map-panel" aria-label="Interactive arsenic risk map">
+      <div id="map"></div>
+
+      <div class="map-legend-shell" id="map-legend-shell" aria-label="Map legend">
+        <button id="legend-toggle" class="map-legend-toggle" type="button" aria-expanded="true" aria-controls="map-legend-content">
+          <span class="legend-toggle-text">Legend</span>
+          <span class="legend-toggle-icon" aria-hidden="true">-</span>
+        </button>
+        <div id="map-legend-content" class="map-legend-content"></div>
+      </div>
+
+      <div id="map-search-shell" class="map-search-shell is-collapsed" aria-label="Search and map tools">
+        <div class="map-toolbar">
+          <button
+            id="search-toggle"
+            class="map-toolbar-button search-toggle-button"
+            type="button"
+            aria-label="Open search"
+            aria-expanded="false"
+            aria-controls="map-search-panel"
+            title="Open search"
+          >
+            <span class="search-icon" aria-hidden="true"></span>
+          </button>
+
+          <div id="map-search-panel" class="search-row map-search-row" hidden>
+            <input
+              id="search-input"
+              name="search-input"
+              type="search"
+              aria-label="Search ZIP code, municipality, or address"
+              placeholder="Search ZIP code, municipality, or address"
+              autocomplete="street-address"
+            />
+            <span class="search-divider" aria-hidden="true"></span>
+            <button id="search-button" class="search-icon-button" type="button" aria-label="Search" title="Search">
+              <span class="search-icon" aria-hidden="true"></span>
+            </button>
+          </div>
+
+          <button id="locate-button" class="map-toolbar-button locate-toolbar-button" type="button" aria-label="Use my location" title="Use my location">
+            <span class="locate-icon" aria-hidden="true"></span>
+          </button>
+
+          <button
+            id="layers-toggle"
+            class="map-toolbar-button layers-toggle-button"
+            type="button"
+            aria-label="Open map layers"
+            aria-expanded="false"
+            aria-controls="map-layers-panel"
+            title="Layers"
+          >
+            <span class="layers-icon" aria-hidden="true"></span>
+          </button>
+
+          <button
+            id="refresh-button"
+            class="map-toolbar-button refresh-toolbar-button"
+            type="button"
+            aria-label="Reset map view"
+            title="Reset map view"
+          >
+            <span class="refresh-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <aside id="map-layers-panel" class="map-layers-panel" aria-labelledby="map-layers-title" hidden>
+          <div class="map-layers-header">
+            <h2 id="map-layers-title">Map Layers</h2>
+            <button id="layers-close" class="map-layers-close" type="button" aria-label="Close map layers" title="Close layers">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+
+          <div class="map-layers-content">
+            <label class="layer-toggle-row" for="layer-private-wells">
+              <span class="layer-checkbox">
+                <input id="layer-private-wells" type="checkbox" checked />
+                <span class="layer-checkbox-box" aria-hidden="true"></span>
+              </span>
+              <span class="layer-toggle-label">Private Wells</span>
+            </label>
+
+            <label class="layer-toggle-row" for="layer-county-subdivisions">
+              <span class="layer-checkbox">
+                <input id="layer-county-subdivisions" type="checkbox" />
+                <span class="layer-checkbox-box" aria-hidden="true"></span>
+              </span>
+              <span class="layer-toggle-label">County Subdivisions</span>
+            </label>
+
+            <label class="layer-toggle-row" for="layer-zip-areas">
+              <span class="layer-checkbox">
+                <input id="layer-zip-areas" type="checkbox" />
+                <span class="layer-checkbox-box" aria-hidden="true"></span>
+              </span>
+              <span class="layer-toggle-label">ZIP Code Areas</span>
+            </label>
+
+            <label class="layer-toggle-row" for="layer-geology">
+              <span class="layer-checkbox">
+                <input id="layer-geology" type="checkbox" />
+                <span class="layer-checkbox-box" aria-hidden="true"></span>
+              </span>
+              <span class="layer-toggle-label">Geologic Formations</span>
+            </label>
+
+            <p id="layer-panel-status" class="layer-panel-status" aria-live="polite"></p>
+          </div>
+        </aside>
+      </div>
+
+      <div id="map-status" class="map-status" role="status" aria-live="polite">Loading map data...</div>
+    </section>
+  </main>
+
+  <script src="../vendor/leaflet.js"></script>
+  <script src="../vendor/leaflet.markercluster.js"></script>
+  <script src="../vendor/turf.min.js"></script>
+  <script src="script_clustered.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+/* Only Brewerytown's complete report pages; reuse the shared gallery and lightbox. */
+.case-gallery:has(img[src*="/brewerytown-neighborhood-profile/report-page-"]) {
+  max-width: 820px;
+}
+
+.image-gallery:has(img[src*="/brewerytown-neighborhood-profile/report-page-"]) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.image-gallery img[src*="/brewerytown-neighborhood-profile/report-page-"] {
+  aspect-ratio: auto;
+}
+
+@media (max-width: 520px) {
+  .image-gallery:has(img[src*="/brewerytown-neighborhood-profile/report-page-"]) {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900">
+  <rect width="1400" height="900" fill="#fffdf8"/>
+  <text x="70" y="90" font-family="Georgia, serif" font-size="48" fill="#252a27">Burn Area Mapping Workflow</text>
+  <text x="70" y="138" font-family="Arial, sans-serif" font-size="24" fill="#5d625e">Natural color, SWIR2/NIR/blue composite, NBR difference, and digitized burn areas.</text>
+  <g transform="translate(70 210)">
+    <rect width="380" height="250" fill="#f7f3eb" stroke="#d8d0c3"/>
+    <rect x="460" width="380" height="250" fill="#dfe8dd" stroke="#d8d0c3"/>
+    <rect x="920" width="380" height="250" fill="#e7edf0" stroke="#d8d0c3"/>
+    <text x="190" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5d625e">Natural color</text>
+    <text x="650" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5d625e">Infrared composite</text>
+    <text x="1110" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5d625e">NBR difference</text>
+  </g>
+  <path d="M150 740h1100" stroke="#b98562" stroke-width="24"/>
+  <text x="700" y="805" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5d625e">Workflow summary based on the ArcGIS StoryMap source.</text>
+</svg>

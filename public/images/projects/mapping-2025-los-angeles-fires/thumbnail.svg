@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="#fffdf8"/>
+  <path d="M0 590C220 500 390 560 560 455s355-220 640-110v415H0z" fill="#dfe8dd"/>
+  <path d="M125 640C280 470 335 415 470 300s250-110 360-205" fill="none" stroke="#b98562" stroke-width="28"/>
+  <path d="M675 370c70-90 46-154 20-216 110 98 160 190 84 300-38 54-118 68-172 28 40-12 60-56 68-112z" fill="#7a5a3e"/>
+  <circle cx="760" cy="455" r="86" fill="none" stroke="#355f78" stroke-width="10"/>
+  <text x="80" y="120" font-family="Georgia, serif" font-size="56" fill="#252a27">Mapping the 2025</text>
+  <text x="80" y="182" font-family="Georgia, serif" font-size="56" fill="#252a27">Los Angeles Fires</text>
+</svg>
