@@ -34,6 +34,84 @@
   const navigationProjects = groupedProjects.flatMap((group) => group.projects).filter((project) => !project.unpublished);
   const page = document.body.dataset.page;
 
+  const emailControls = document.querySelectorAll("[data-copy-email]");
+  if (emailControls.length) {
+    const feedback = document.createElement("div");
+    feedback.className = "email-copy-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    feedback.setAttribute("aria-atomic", "true");
+    document.body.append(feedback);
+    let feedbackTimer;
+    let copyPending = false;
+
+    async function copyEmail(address) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(address);
+        return;
+      }
+      // Support local previews and older browsers; only report verified success.
+      const selection = window.getSelection();
+      const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+      const active = document.activeElement;
+      const input = document.createElement("textarea");
+      input.value = address;
+      input.className = "email-copy-buffer";
+      input.setAttribute("readonly", "");
+      document.body.append(input);
+      try {
+        input.select();
+        if (!document.execCommand("copy")) throw new Error("Copy failed");
+      } finally {
+        input.remove();
+        active?.focus({ preventScroll: true });
+        if (selection) {
+          selection.removeAllRanges();
+          ranges.forEach((range) => selection.addRange(range));
+        }
+      }
+    }
+
+    emailControls.forEach((control) => {
+      control.addEventListener("keydown", (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          if (!event.repeat) control.click();
+        }
+      });
+      control.addEventListener("click", async (event) => {
+        event.preventDefault();
+        if (copyPending) return;
+        copyPending = true;
+        clearTimeout(feedbackTimer);
+        feedback.textContent = "";
+        feedback.classList.remove("is-visible");
+        let message;
+        try {
+          await copyEmail(control.dataset.copyEmail);
+          message = "Email copied!";
+        } catch {
+          message = "Couldn’t copy. Please select and copy the email address.";
+        } finally {
+          copyPending = false;
+        }
+        feedback.textContent = message;
+        feedback.classList.add("is-visible");
+        const rect = control.getBoundingClientRect();
+        const x = event.detail ? event.clientX : rect.left + rect.width / 2;
+        const y = event.detail ? event.clientY : rect.top;
+        const width = feedback.offsetWidth;
+        const height = feedback.offsetHeight;
+        feedback.style.left = `${Math.max(8, Math.min(x - width / 2, window.innerWidth - width - 8))}px`;
+        feedback.style.top = `${Math.max(8, Math.min(y - height - 12, window.innerHeight - height - 8))}px`;
+        feedbackTimer = setTimeout(() => {
+          feedback.classList.remove("is-visible");
+          feedback.textContent = "";
+        }, message === "Email copied!" ? 2000 : 6000);
+      });
+    });
+  }
+
   function groupTitle(project) {
     return groups.find((group) => group.id === project.group)?.title || "";
   }
