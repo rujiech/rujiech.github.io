@@ -1332,3 +1332,24 @@ body[data-page="contact"] .contact-links svg {
 
 /* Borderless maps for Planning Indego Bike Share Stations only. */
 img[src*='/indego-bike-share-stations/'] { border: 0; }
+/* Email actions retain their existing link typography and layout. */
+[data-copy-email] { cursor: pointer; text-decoration: underline; }
+[data-copy-email]:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.email-copy-feedback {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: .55rem .8rem;
+  border-radius: 4px;
+  background: var(--green);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: .85rem;
+  line-height: 1.4;
+  box-shadow: 0 3px 12px #0002;
+  pointer-events: none;
+  visibility: hidden;
+}
+.email-copy-feedback.is-visible { visibility: visible; }
+.email-copy-buffer { position: fixed; left: -9999px; top: 0; }
